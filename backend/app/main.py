@@ -187,3 +187,17 @@ def read_preferences():
 def write_preferences(prefs: UserPreferences):
     save_user_preferences(prefs.model_dump())
     return {"status": "success", "message": "Preferences updated."}
+
+# Mount compiled React frontend if present (enables single full-stack Web Service on Render)
+import os
+from fastapi.staticfiles import StaticFiles
+
+dist_candidates = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")),
+    os.path.abspath(os.path.join(os.getcwd(), "frontend", "dist")),
+    os.path.abspath(os.path.join(os.getcwd(), "dist")),
+]
+dist_dir = next((d for d in dist_candidates if os.path.isdir(d)), None)
+if dist_dir:
+    app.mount("/", StaticFiles(directory=dist_dir, html=True), name="static_frontend")
+
