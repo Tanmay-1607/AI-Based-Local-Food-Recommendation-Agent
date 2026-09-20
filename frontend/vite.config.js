@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
   const mergedEnv = { ...envRoot, ...envFrontend, ...process.env }
 
   // Detect VITE_API_URL or any common alias (VITE_BACKEND_URL, VITE_API_BASE_URL, BACKEND_URL, API_URL)
-  const resolvedApiUrl = (
+  const rawApiUrl = (
     mergedEnv.VITE_API_URL ||
     mergedEnv.VITE_BACKEND_URL ||
     mergedEnv.VITE_API_BASE_URL ||
@@ -22,17 +22,17 @@ export default defineConfig(({ mode }) => {
     mergedEnv.BACKEND_URL ||
     mergedEnv.API_URL ||
     ''
-  ).trim()
+  )
+    .trim()
+    .replace(/^["']|["']$/g, '') // Strip accidental quotes added in dashboard
 
   return {
     plugins: [react()],
-    // Allow Vite to find .env files in the repository root as well as frontend/
-    envDir: rootDir,
     define: {
       // Injects the resolved URL statically at build time into import.meta.env.VITE_API_URL
-      ...(resolvedApiUrl
+      ...(rawApiUrl
         ? {
-            'import.meta.env.VITE_API_URL': JSON.stringify(resolvedApiUrl),
+            'import.meta.env.VITE_API_URL': JSON.stringify(rawApiUrl),
           }
         : {}),
     },

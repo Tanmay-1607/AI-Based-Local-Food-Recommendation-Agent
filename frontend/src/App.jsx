@@ -8,9 +8,10 @@ import {
   getRecommendations, 
   submitFeedback,
   getFeedbackList,
-  getApiDiagnosticInfo
+  getApiDiagnosticInfo,
+  setCustomApiUrl
 } from './services/api';
-import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw, WifiOff, RefreshCw, ExternalLink } from 'lucide-react';
+import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw, WifiOff, RefreshCw, ExternalLink, Link2 } from 'lucide-react';
 
 const QUICK_FILTERS = [
   { label: "All Nagpur", query: "", cuisine: null, budget: null, foodType: null },
@@ -83,6 +84,27 @@ export default function App() {
   }, []);
 
   const [apiDiag, setApiDiag] = useState(() => getApiDiagnosticInfo());
+  const [customUrlInput, setCustomUrlInput] = useState("");
+
+  const handleConnectCustomUrl = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const trimmed = customUrlInput.trim();
+    if (!trimmed) return;
+    setCustomApiUrl(trimmed);
+    const updated = getApiDiagnosticInfo();
+    setApiDiag(updated);
+    loadRecommendations(searchQuery, maxBudget, foodType, activeCuisine);
+    showToast(`Connecting to backend: ${trimmed}`);
+  };
+
+  const handleResetCustomUrl = () => {
+    setCustomApiUrl("");
+    setCustomUrlInput("");
+    const updated = getApiDiagnosticInfo();
+    setApiDiag(updated);
+    loadRecommendations(searchQuery, maxBudget, foodType, activeCuisine);
+    showToast("Cleared custom backend URL.");
+  };
 
   const loadRecommendations = async (query = searchQuery, budget = maxBudget, diet = foodType, cui = activeCuisine) => {
     setIsLoading(true);
@@ -102,10 +124,12 @@ export default function App() {
       setErrorMsg(null);
     } catch (err) {
       console.error("API error:", err);
-      if (diag.isMissingViteApiUrl) {
+      const currentDiag = getApiDiagnosticInfo();
+      setApiDiag(currentDiag);
+      if (currentDiag.isMissingProductionApiUrl) {
         setErrorMsg("VITE_API_URL is not set in Vercel. Frontend cannot connect to your Render backend without it.");
       } else {
-        setErrorMsg(`Failed to connect to backend at ${diag.resolvedApiBase}. If using Render free tier, it may take 30-50 seconds to wake up.`);
+        setErrorMsg(`Failed to connect to backend at ${currentDiag.resolvedApiBase}. If using Render free tier, it may take 30-50 seconds to wake up.`);
       }
     } finally {
       setIsLoading(false);
@@ -292,22 +316,70 @@ export default function App() {
                   {apiDiag.resolvedApiBase}
                 </code>
               </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-stone-600 border-t border-stone-200 pt-2">
+                <span>Build Diagnostic:</span>
+                <span className={`font-mono px-1.5 py-0.5 rounded text-[10px] font-semibold ${apiDiag.hasEnvVar ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {apiDiag.hasEnvVar ? 'VITE_API_URL detected in build' : 'VITE_API_URL not baked into current build'}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-stone-600">
+                <span>Config Source:</span>
+                <span className="font-mono text-stone-700 text-[10px]">{apiDiag.configSource}</span>
+              </div>
+
               {apiDiag.isMissingProductionApiUrl && (
-                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3.5 rounded-xl space-y-2">
+                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3.5 rounded-xl space-y-2.5">
                   <p className="font-bold text-xs flex items-center space-x-1.5 text-amber-950">
-                    <span>⚠️ Vercel Setup Step Required:</span>
+                    <span>⚠️ Vercel Setup Step:</span>
                   </p>
                   <p className="text-[11px] text-stone-700 leading-relaxed">
-                    Your frontend is deployed on Vercel, but the environment variable <code className="bg-amber-100 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> is not configured.
+                    Your frontend is deployed on Vercel, but <code className="bg-amber-100 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> was not embedded in this build.
                   </p>
-                  <ol className="list-decimal list-inside space-y-1.5 text-stone-800 text-[11px] font-medium pt-1">
-                    <li>Open your Vercel Dashboard ➔ Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
-                    <li>Add Key: <code className="bg-white border border-amber-300 font-bold px-1.5 py-0.5 rounded font-mono">VITE_API_URL</code></li>
-                    <li>Value: <code className="bg-white border border-amber-300 font-bold px-1.5 py-0.5 rounded font-mono">https://your-backend-name.onrender.com</code> (your Render URL)</li>
-                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>Redeploy</strong> (uncheck build cache).</li>
+                  <ol className="list-decimal list-inside space-y-1 text-stone-800 text-[11px] font-medium pt-1">
+                    <li>In Vercel Dashboard ➔ Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
+                    <li>Add Key: <code className="bg-white border border-amber-300 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> (Value: your Render URL).</li>
+                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>...</strong> ➔ <strong>Redeploy</strong> (ensure <strong>Use existing Build Cache</strong> is <strong>UNCHECKED</strong>).</li>
                   </ol>
+
+                  {/* Instant Quick-Connect Form */}
+                  <form onSubmit={handleConnectCustomUrl} className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
+                    <label className="block text-[11px] font-bold text-stone-800">
+                      ⚡ Quick Connect (Connect immediately right now):
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="url"
+                        value={customUrlInput}
+                        onChange={(e) => setCustomUrlInput(e.target.value)}
+                        placeholder="https://your-backend-name.onrender.com"
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white font-mono text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                      >
+                        Connect Now
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
+
+              {apiDiag.hasStoredUrl && (
+                <div className="pt-2 border-t border-stone-200 flex items-center justify-between">
+                  <span className="text-[10px] text-stone-500">Using browser-connected backend URL</span>
+                  <button
+                    type="button"
+                    onClick={handleResetCustomUrl}
+                    className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Reset to Default
+                  </button>
+                </div>
+              )}
+
               {!apiDiag.isMissingProductionApiUrl && (
                 <p className="text-stone-500 text-[11px] pt-1 border-t border-stone-200">
                   Render Free Tier Note: If your Render web service recently went to sleep, the first request takes ~30–50 seconds to boot up.

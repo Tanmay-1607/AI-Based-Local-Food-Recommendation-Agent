@@ -49,17 +49,61 @@ export function isLocalEnvironment() {
 }
 
 /**
+ * Checks for a stored or query-parameter backend URL in browser runtime.
+ * Allows quick configuration directly without waiting for a redeploy.
+ */
+export function getStoredApiUrl() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryUrl = params.get('api') || params.get('apiUrl') || params.get('backend');
+    if (queryUrl && queryUrl.trim()) {
+      const clean = queryUrl.trim();
+      localStorage.setItem('localbite_custom_api_url', clean);
+      return clean;
+    }
+    const stored = localStorage.getItem('localbite_custom_api_url');
+    if (stored && stored.trim()) {
+      return stored.trim();
+    }
+  } catch (e) {
+    // Graceful fallback if localStorage is disabled
+  }
+  return '';
+}
+
+/**
+ * Persists a custom backend URL in browser localStorage.
+ */
+export function setCustomApiUrl(url) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (url && url.trim()) {
+      localStorage.setItem('localbite_custom_api_url', url.trim());
+    } else {
+      localStorage.removeItem('localbite_custom_api_url');
+    }
+  } catch (e) {}
+}
+
+/**
  * Resolves the active API base URL:
- * 1. Reads VITE_API_URL or aliases (highest priority for Render/Production).
- * 2. If running locally under Vite dev server (port 5173), uses relative '/api' proxy.
- * 3. If running locally outside Vite proxy, falls back to direct 'http://127.0.0.1:8000/api'.
- * 4. In production (e.g., Vercel), returns empty string if VITE_API_URL is omitted.
+ * 1. Reads VITE_API_URL or aliases (highest priority for Render/Production build).
+ * 2. Reads stored custom URL (if provided in browser query/input).
+ * 3. If running locally under Vite dev server (port 5173), uses relative '/api' proxy.
+ * 4. If running locally outside Vite proxy, falls back to direct 'http://127.0.0.1:8000/api'.
+ * 5. In production (e.g., Vercel), returns empty string if unconfigured.
  *    (Never falls back to localhost in production!)
  */
 export function getApiBaseUrl() {
   const envApiUrl = getRawEnvApiUrl();
   if (envApiUrl) {
     return normalizeApiUrl(envApiUrl);
+  }
+
+  const storedUrl = getStoredApiUrl();
+  if (storedUrl) {
+    return normalizeApiUrl(storedUrl);
   }
 
   // Development-only fallback
@@ -70,7 +114,7 @@ export function getApiBaseUrl() {
     return 'http://127.0.0.1:8000/api';
   }
 
-  // Production without VITE_API_URL: do not guess or fallback to localhost
+  // Production without configured URL: do not guess or fallback to localhost
   return '';
 }
 
@@ -94,13 +138,26 @@ export function getEndpointUrl(endpoint) {
  */
 export function getApiDiagnosticInfo() {
   const envApiUrl = getRawEnvApiUrl();
+  const storedUrl = getStoredApiUrl();
   const isLocal = isLocalEnvironment();
   const apiBase = getApiBaseUrl();
-  const isConfigured = Boolean(envApiUrl);
+  const isConfigured = Boolean(apiBase && apiBase.startsWith('http'));
   const isMissing = !isLocal && !isConfigured;
+
+  let configSource = 'None (Awaiting Configuration)';
+  if (envApiUrl) {
+    configSource = 'Vercel Environment Variable (Build-Time)';
+  } else if (storedUrl) {
+    configSource = 'Browser Storage / URL Query (?api=)';
+  } else if (isLocal) {
+    configSource = 'Localhost Development Proxy';
+  }
 
   return {
     rawEnvUrl: envApiUrl || null,
+    hasEnvVar: Boolean(envApiUrl),
+    hasStoredUrl: Boolean(storedUrl),
+    configSource,
     resolvedApiBase: apiBase || '(Not Configured — Awaiting Vercel Environment Variable)',
     isConfigured,
     isLocal,
