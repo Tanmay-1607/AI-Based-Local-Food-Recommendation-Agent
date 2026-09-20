@@ -11,7 +11,8 @@ import {
   getApiDiagnosticInfo,
   setCustomApiUrl
 } from './services/api';
-import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw, WifiOff, RefreshCw, ExternalLink, Link2 } from 'lucide-react';
+import { getOfflineRecommendations } from './data/nagpurDataset';
+import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw, WifiOff, RefreshCw, ExternalLink, Link2, Info } from 'lucide-react';
 
 const QUICK_FILTERS = [
   { label: "All Nagpur", query: "", cuisine: null, budget: null, foodType: null },
@@ -85,6 +86,8 @@ export default function App() {
 
   const [apiDiag, setApiDiag] = useState(() => getApiDiagnosticInfo());
   const [customUrlInput, setCustomUrlInput] = useState("");
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [showDiagCard, setShowDiagCard] = useState(false);
 
   const handleConnectCustomUrl = (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -122,14 +125,27 @@ export default function App() {
       const res = await getRecommendations(payload);
       setRecommendations(res.results || []);
       setErrorMsg(null);
+      setIsOfflineMode(false);
     } catch (err) {
-      console.error("API error:", err);
+      console.warn("Backend unavailable, using local Nagpur dataset:", err);
       const currentDiag = getApiDiagnosticInfo();
       setApiDiag(currentDiag);
+
+      // Seamlessly fall back to bundled offline Nagpur food dataset
+      const offlineResults = getOfflineRecommendations({
+        query: query || "",
+        cuisine: cui || null,
+        max_budget: budget || null,
+        food_type: diet || null,
+        top_n: 15
+      });
+      setRecommendations(offlineResults);
+      setIsOfflineMode(true);
+
       if (currentDiag.isMissingProductionApiUrl) {
-        setErrorMsg("VITE_API_URL is not set in Vercel. Frontend cannot connect to your Render backend without it.");
+        setErrorMsg("VITE_API_URL not configured. Running in offline demo mode with 54 authentic Nagpur food spots.");
       } else {
-        setErrorMsg(`Failed to connect to backend at ${currentDiag.resolvedApiBase}. If using Render free tier, it may take 30-50 seconds to wake up.`);
+        setErrorMsg(`Connecting to backend at ${currentDiag.resolvedApiBase}... (Render free tier wakes up in 30-50s). Showing offline demo places meanwhile.`);
       }
     } finally {
       setIsLoading(false);
@@ -295,17 +311,48 @@ export default function App() {
       {/* Main Recommendations Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 flex-1 w-full">
         
-        {/* If backend connection error, show helpful connection guidance instead of misleading "0 spots found" */}
-        {errorMsg ? (
-          <div className="max-w-2xl mx-auto py-12 px-6 bg-white rounded-3xl border border-rose-200 shadow-card text-center space-y-6">
-            <div className="w-16 h-16 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center mx-auto text-rose-600">
-              <WifiOff className="w-8 h-8" />
+        {/* Offline Demo Status Banner */}
+        {isOfflineMode && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50/95 border border-amber-200 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-soft">
+            <div className="flex items-center space-x-2">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <div>
+                <span className="font-bold">Nagpur Food Guide Active (Offline Mode).</span>
+                <span className="text-amber-800 ml-1">54 curated spots & filters are fully operational!</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowDiagCard(prev => !prev)}
+                className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold transition-all text-[11px] cursor-pointer"
+              >
+                {showDiagCard ? "Hide Setup" : "⚙️ Backend Connection"}
+              </button>
+              <button
+                type="button"
+                onClick={() => loadRecommendations()}
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-xl bg-forest-900 text-white font-bold hover:bg-forest-800 transition-all text-[11px] flex items-center space-x-1 cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Retry Live AI</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Toggleable Backend Connection Diagnostic & Quick Connect Card */}
+        {showDiagCard && (
+          <div className="mb-8 max-w-2xl mx-auto py-8 px-6 bg-white rounded-3xl border border-amber-200 shadow-card text-center space-y-5">
+            <div className="w-12 h-12 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center mx-auto text-amber-700">
+              <Link2 className="w-6 h-6" />
             </div>
 
             <div>
-              <h2 className="text-xl font-black text-forest-950">Backend Connection Notice</h2>
-              <p className="text-sm text-stone-600 mt-2 max-w-lg mx-auto leading-relaxed">
-                {errorMsg}
+              <h2 className="text-lg font-black text-forest-950">Backend Connection & Setup</h2>
+              <p className="text-xs text-stone-600 mt-1 max-w-md mx-auto leading-relaxed">
+                Connect your live FastAPI backend on Render or verify environment settings.
               </p>
             </div>
 
@@ -329,43 +376,27 @@ export default function App() {
                 <span className="font-mono text-stone-700 text-[10px]">{apiDiag.configSource}</span>
               </div>
 
-              {apiDiag.isMissingProductionApiUrl && (
-                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3.5 rounded-xl space-y-2.5">
-                  <p className="font-bold text-xs flex items-center space-x-1.5 text-amber-950">
-                    <span>⚠️ Vercel Setup Step:</span>
-                  </p>
-                  <p className="text-[11px] text-stone-700 leading-relaxed">
-                    Your frontend is deployed on Vercel, but <code className="bg-amber-100 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> was not embedded in this build.
-                  </p>
-                  <ol className="list-decimal list-inside space-y-1 text-stone-800 text-[11px] font-medium pt-1">
-                    <li>In Vercel Dashboard ➔ Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
-                    <li>Add Key: <code className="bg-white border border-amber-300 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> (Value: your Render URL).</li>
-                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>...</strong> ➔ <strong>Redeploy</strong> (ensure <strong>Use existing Build Cache</strong> is <strong>UNCHECKED</strong>).</li>
-                  </ol>
-
-                  {/* Instant Quick-Connect Form */}
-                  <form onSubmit={handleConnectCustomUrl} className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
-                    <label className="block text-[11px] font-bold text-stone-800">
-                      ⚡ Quick Connect (Connect immediately right now):
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="url"
-                        value={customUrlInput}
-                        onChange={(e) => setCustomUrlInput(e.target.value)}
-                        placeholder="https://your-backend-name.onrender.com"
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white font-mono text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                      <button
-                        type="submit"
-                        className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
-                      >
-                        Connect Now
-                      </button>
-                    </div>
-                  </form>
+              {/* Instant Quick-Connect Form */}
+              <form onSubmit={handleConnectCustomUrl} className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
+                <label className="block text-[11px] font-bold text-stone-800">
+                  ⚡ Quick Connect (Connect immediately to your Render backend):
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={customUrlInput}
+                    onChange={(e) => setCustomUrlInput(e.target.value)}
+                    placeholder="https://your-backend-name.onrender.com"
+                    className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-white font-mono text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                  >
+                    Connect Now
+                  </button>
                 </div>
-              )}
+              </form>
 
               {apiDiag.hasStoredUrl && (
                 <div className="pt-2 border-t border-stone-200 flex items-center justify-between">
@@ -379,42 +410,12 @@ export default function App() {
                   </button>
                 </div>
               )}
-
-              {!apiDiag.isMissingProductionApiUrl && (
-                <p className="text-stone-500 text-[11px] pt-1 border-t border-stone-200">
-                  Render Free Tier Note: If your Render web service recently went to sleep, the first request takes ~30–50 seconds to boot up.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => loadRecommendations()}
-                disabled={isLoading}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-forest-900 text-white text-xs font-bold hover:bg-forest-800 transition-all shadow-md disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>{isLoading ? 'Connecting...' : 'Retry Connection'}</span>
-              </button>
-
-              {!apiDiag.isMissingProductionApiUrl && apiDiag.resolvedApiBase.startsWith('http') && (
-                <a
-                  href={`${apiDiag.resolvedApiBase}/health`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-cream-300 text-stone-700 text-xs font-bold hover:bg-cream-100 transition-all"
-                >
-                  <span>Check API Health</span>
-                  <ExternalLink className="w-3 h-3 text-stone-400" />
-                </a>
-              )}
             </div>
           </div>
-        ) : (
-          <>
-            {/* Results Header */}
-            <div className="flex items-center justify-between pb-3 mb-6 border-b border-cream-300">
+        )}
+
+        {/* Results Header */}
+        <div className="flex items-center justify-between pb-3 mb-6 border-b border-cream-300">
               <div>
                 <h2 className="text-lg sm:text-xl font-black text-forest-950 flex items-center space-x-2">
                   <Utensils className="w-5 h-5 text-spice-600" />
@@ -481,8 +482,6 @@ export default function App() {
                 </button>
               </div>
             )}
-          </>
-        )}
 
       </main>
 

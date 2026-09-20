@@ -19,11 +19,11 @@ def run_verification():
     )
     with urllib.request.urlopen(req) as resp:
         chat_res = json.loads(resp.read().decode("utf-8"))
-        print(f"AI Mode: {chat_res['ai_mode']}")
-        print(f"Tools Count: {len(chat_res['tools_executed'])}")
-        for t in chat_res['tools_executed']:
-            print(f"  Executed Tool: {t['tool']} with args {t['args']}")
-        print("Reply excerpt:\n", chat_res["reply"][:250])
+        print("AI Mode:", chat_res.get("ai_mode"))
+    print("Tools Count:", len(chat_res.get("tools_executed", [])))
+    for t in chat_res.get("tools_executed", []):
+        print(f"  Executed Tool: {t['tool']} with args {t.get('args', {})}")
+    print("Reply excerpt:\n", chat_res["reply"][:250].encode('ascii', 'replace').decode('ascii'))
 
     print("\n=== 3. Testing Live Web Search via Tavily ===")
     tavily_payload = {
@@ -40,7 +40,7 @@ def run_verification():
         print(f"Tools Count: {len(tavily_res['tools_executed'])}")
         for t in tavily_res['tools_executed']:
             print(f"  Executed Tool: {t['tool']} with args {t['args']}")
-        print("Reply excerpt:\n", tavily_res["reply"][:250])
+        print("Reply excerpt:\n", tavily_res["reply"][:250].encode('ascii', 'replace').decode('ascii'))
 
     print("\n=== 4. Testing Feedback Personalization Loop ===")
     fb_payload = {
@@ -59,11 +59,11 @@ def run_verification():
         fb_res = json.loads(resp.read().decode("utf-8"))
         print("Feedback saved response:", fb_res)
 
-    print("\n=== 5. Testing Recommender with Liked Boost ===")
+    print("\n=== 5. Verifying Personalized Scoring Recalibration ===")
     rec_payload = {
-        "query": "Saoji spicy food",
-        "food_type": "non-veg",
-        "top_n": 2
+        "query": "Saoji",
+        "cuisine": "Saoji",
+        "top_n": 3
     }
     rec_req = urllib.request.Request(
         "http://127.0.0.1:8000/api/recommend",
@@ -72,9 +72,8 @@ def run_verification():
     )
     with urllib.request.urlopen(rec_req) as resp:
         rec_res = json.loads(resp.read().decode("utf-8"))
-        for it in rec_res["results"]:
-            print(f"- {it['dish_name']} @ {it['restaurant_name']} ({it['locality']}) => Match: {it['match_score']}%")
-            print(f"  Why: {it['why_recommended']}")
+        for item in rec_res["results"]:
+            print(f"- {item['dish_name']} ({item['restaurant_name']}): Match {item['match_score']}% | {item['why_recommended']}".encode('ascii', 'replace').decode('ascii'))
 
 if __name__ == "__main__":
     run_verification()

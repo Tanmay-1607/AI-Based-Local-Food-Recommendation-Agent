@@ -136,6 +136,38 @@ class RecommenderEngine:
             "breakfast", "nashta", "morning", "poha", "misal", "idli", "dosa"
         ])
 
+        import re
+
+        # Natural entity extraction from query if not explicitly passed
+        target_budget = max_budget
+        if target_budget is None and raw_q:
+            b_match = re.search(r'(?:under|below|budget|within|less than|max)\s*₹?\s*(\d+)', raw_q)
+            if not b_match:
+                b_match = re.search(r'₹\s*(\d+)', raw_q)
+            if b_match:
+                try:
+                    target_budget = float(b_match.group(1))
+                except ValueError:
+                    target_budget = None
+
+        target_locality = locality
+        if not target_locality and raw_q:
+            for loc in self.get_unique_localities():
+                if loc.lower() in raw_q:
+                    target_locality = loc
+                    break
+
+        target_food_type = food_type
+        if not target_food_type and raw_q:
+            if is_sweet_intent:
+                target_food_type = "veg"
+            elif bool(re.search(r'\bnon[\s-]?veg\b', raw_q)) or any(w in raw_q for w in ["chicken", "mutton", "lamb", "fish", "shawarma"]):
+                target_food_type = "non-veg"
+            elif bool(re.search(r'\begg\b', raw_q)):
+                target_food_type = "egg"
+            elif bool(re.search(r'\b(pure[\s-]?veg|veg|vegetarian)\b', raw_q)) and not bool(re.search(r'\bnon[\s-]?veg\b', raw_q)):
+                target_food_type = "veg"
+
         target_cuisine = cuisine
         if is_sweet_intent and not cuisine:
             target_cuisine = "Sweets & Desserts"
@@ -144,10 +176,10 @@ class RecommenderEngine:
 
         # 1. Apply hard filters
         df_candidates = self.filter_places(
-            locality=locality,
+            locality=target_locality,
             cuisine=target_cuisine,
-            max_budget=max_budget,
-            food_type=food_type
+            max_budget=target_budget,
+            food_type=target_food_type
         )
 
         # STRICT NEGATIVE GATING:
@@ -179,7 +211,7 @@ class RecommenderEngine:
             elif is_spicy_intent:
                 df_candidates = self.df[self.df["spice_level"] >= 3]
             else:
-                df_candidates = self.filter_places(max_budget=max_budget, food_type=food_type)
+                df_candidates = self.filter_places(max_budget=target_budget, food_type=target_food_type)
                 if df_candidates.empty:
                     df_candidates = self.df.copy()
 
@@ -317,6 +349,43 @@ class RecommenderEngine:
                 why_recommended=why_text,
             )
             results.append(item)
+
+        if not results and candidate_indices:
+            for idx, orig_idx in enumerate(candidate_indices):
+                row = self.df.iloc[orig_idx]
+                sim = float(sim_scores[idx]) if idx < len(sim_scores) else 0.5
+                row_spice = int(row["spice_level"])
+                if is_sweet_intent and (row["cuisine"] != "Sweets & Desserts" or row_spice > 1):
+                    continue
+                if is_spicy_intent and (row["cuisine"] == "Sweets & Desserts" or row_spice < 3):
+                    continue
+                price = float(row["price"])
+                rating = float(row["rating"])
+                rating_score = max(0.0, min(1.0, (rating - 3.0) / 2.0))
+                budget_fit = 1.0 - (price / self.df["price"].max()) * 0.3
+                raw_score = (0.45 * rating_score) + (0.35 * budget_fit) + 0.20
+                match_percentage = round(min(98.0, max(50.0, raw_score * 100)), 1)
+                item = RecommendationItem(
+                    restaurant_id=row["restaurant_id"],
+                    restaurant_name=row["restaurant_name"],
+                    locality=row["locality"],
+                    cuisine=row["cuisine"],
+                    dish_name=row["dish_name"],
+                    price=price,
+                    food_type=row["food_type"],
+                    spice_level=row_spice,
+                    rating=rating,
+                    description=row["description"],
+                    source=row.get("source", "Nagpur Local Food Guide (Demo Dataset)"),
+                    last_updated=str(row.get("last_updated", "2026-03-15")),
+                    match_score=match_percentage,
+                    similarity_score=round(sim, 3),
+                    budget_fit_score=round(budget_fit, 3),
+                    rating_score=round(rating_score, 3),
+                    spice_fit_score=0.8,
+                    why_recommended=f"Popular {row['cuisine']} choice in {row['locality']} (Rating {rating}★, ₹{int(price)}).",
+                )
+                results.append(item)
 
         if is_sweet_intent:
             results = [r for r in results if r.cuisine == "Sweets & Desserts" and r.spice_level == 1]

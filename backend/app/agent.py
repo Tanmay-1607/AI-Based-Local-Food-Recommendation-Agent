@@ -196,14 +196,25 @@ class FoodAgentService:
             elif "biryani" in lowered or "kebab" in lowered:
                 matched_cuisine = "Mughlai"
 
+        is_non_veg = (
+            bool(re.search(r'\bnon[\s-]?veg\b', lowered)) or
+            any(w in lowered for w in ["chicken", "mutton", "lamb", "fish", "prawns", "kebab", "meat", "shawarma"])
+        )
+        is_egg = bool(re.search(r'\begg\b', lowered))
+        is_pure_veg = (
+            bool(re.search(r'\bpure[\s-]?veg\b', lowered)) or
+            bool(re.search(r'\bvegetarian\b', lowered)) or
+            (bool(re.search(r'\bveg\b', lowered)) and not is_non_veg)
+        )
+
         food_type = None
         if is_sweet:
             food_type = "veg"
-        elif "non-veg" in lowered or "nonveg" in lowered or "chicken" in lowered or "mutton" in lowered:
+        elif is_non_veg:
             food_type = "non-veg"
-        elif "egg" in lowered:
+        elif is_egg:
             food_type = "egg"
-        elif "veg" in lowered or "vegetarian" in lowered:
+        elif is_pure_veg:
             food_type = "veg"
 
         spice_level = None
@@ -432,15 +443,24 @@ class FoodAgentService:
             ])
             if (not final_reply.strip() or spicy_leak) and recommended_items:
                 top = recommended_items[0]
+                if is_sweet_req:
+                    cat_header = "authentic sweets & desserts"
+                elif any(w in message.lower() for w in ["spicy", "saoji", "fiery"]):
+                    cat_header = f"spicy {top.cuisine}"
+                elif any(w in message.lower() for w in ["breakfast", "poha"]):
+                    cat_header = "morning breakfast & street food"
+                else:
+                    cat_header = f"{top.cuisine} food"
+
                 lines = [
-                    f"Here are my top Nagpur recommendations for authentic sweets & desserts:\n",
+                    f"Here are my top Nagpur recommendations for {cat_header}:\n",
                     f"1. **{top.dish_name}** at *{top.restaurant_name}* ({top.locality}) — **₹{int(top.price)}** | {top.match_score}% Match",
                     f"   *{top.why_recommended}*\n"
                 ]
                 if len(recommended_items) > 1:
-                    lines.append("**Other delicious sweet options:**")
+                    lines.append("**Other delicious options:**")
                     for it in recommended_items[1:5]:
-                        lines.append(f"- **{it.dish_name}** at *{it.restaurant_name}* ({it.locality}) — ₹{int(it.price)} (Rating: {it.rating}★, Spice {it.spice_level}/5 🍬)")
+                        lines.append(f"- **{it.dish_name}** at *{it.restaurant_name}* ({it.locality}) — ₹{int(it.price)} (Rating: {it.rating}★, Spice {it.spice_level}/5)")
                 final_reply = "\n".join(lines)
 
             return final_reply, recommended_items, tools_executed
