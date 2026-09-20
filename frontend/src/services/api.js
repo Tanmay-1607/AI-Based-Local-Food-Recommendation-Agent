@@ -91,9 +91,7 @@ export function setCustomApiUrl(url) {
  * 1. Reads VITE_API_URL or aliases (highest priority for Render/Production build).
  * 2. Reads stored custom URL (if provided in browser query/input).
  * 3. If running locally under Vite dev server (port 5173), uses relative '/api' proxy.
- * 4. If running locally outside Vite proxy, falls back to direct 'http://127.0.0.1:8000/api'.
- * 5. In production (e.g., Vercel), returns empty string if unconfigured.
- *    (Never falls back to localhost in production!)
+ * 4. Defaults to relative '/api' for Render unified deployment & Vite proxy.
  */
 export function getApiBaseUrl() {
   const envApiUrl = getRawEnvApiUrl();
@@ -106,34 +104,23 @@ export function getApiBaseUrl() {
     return normalizeApiUrl(storedUrl);
   }
 
-  // Development-only fallback
-  if (isLocalEnvironment()) {
-    if (typeof window !== 'undefined' && window.location.port === '5173') {
-      return '/api';
-    }
-    return 'http://127.0.0.1:8000/api';
-  }
-
-  // Production without configured URL: do not guess or fallback to localhost
-  return '';
+  // Development & Render unified deployment default:
+  // In Vite dev server (proxied) and Render Web Service (FastAPI serving React),
+  // relative '/api' connects directly to the backend on the same origin.
+  return '/api';
 }
 
 /**
- * Constructs a fully qualified endpoint URL, validating production configuration.
+ * Constructs a fully qualified endpoint URL.
  */
 export function getEndpointUrl(endpoint) {
-  const base = getApiBaseUrl();
-  if (!base) {
-    throw new Error(
-      "VITE_API_URL is not set in Vercel. Frontend cannot connect to your Render backend without it."
-    );
-  }
+  const base = getApiBaseUrl() || '/api';
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${base}${cleanEndpoint}`;
 }
 
 /**
- * Returns safe diagnostic metadata for the UI to display helpful setup guidance.
+ * Returns safe diagnostic metadata for the UI.
  * Never exposes secrets.
  */
 export function getApiDiagnosticInfo() {
@@ -141,12 +128,11 @@ export function getApiDiagnosticInfo() {
   const storedUrl = getStoredApiUrl();
   const isLocal = isLocalEnvironment();
   const apiBase = getApiBaseUrl();
-  const isConfigured = Boolean(apiBase && apiBase.startsWith('http'));
-  const isMissing = !isLocal && !isConfigured;
+  const isConfigured = Boolean(apiBase);
 
-  let configSource = 'None (Awaiting Configuration)';
+  let configSource = 'Render / Same-Origin API (/api)';
   if (envApiUrl) {
-    configSource = 'Vercel Environment Variable (Build-Time)';
+    configSource = 'Render Environment Variable';
   } else if (storedUrl) {
     configSource = 'Browser Storage / URL Query (?api=)';
   } else if (isLocal) {
@@ -158,11 +144,11 @@ export function getApiDiagnosticInfo() {
     hasEnvVar: Boolean(envApiUrl),
     hasStoredUrl: Boolean(storedUrl),
     configSource,
-    resolvedApiBase: apiBase || '(Not Configured — Awaiting Vercel Environment Variable)',
+    resolvedApiBase: apiBase || '/api',
     isConfigured,
     isLocal,
-    isMissingProductionApiUrl: isMissing,
-    isMissingViteApiUrl: isMissing, // Alias for component compatibility
+    isMissingProductionApiUrl: false,
+    isMissingViteApiUrl: false,
     currentOrigin: typeof window !== 'undefined' ? window.location.origin : ''
   };
 }

@@ -1,0 +1,51 @@
+# =========================================================
+# LocalBite AI — Render Blueprint (render.yaml)
+# Deploy full-stack LocalBite AI seamlessly on Render:
+# 1. Backend: Python FastAPI + SQLite + Groq AI Engine
+# 2. Frontend: React + Vite + Tailwind CSS Static Site
+# =========================================================
+
+services:
+  # -------------------------------------------------------
+  # 1. Backend Web Service (FastAPI)
+  # -------------------------------------------------------
+  - type: web
+    name: localbite-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GROQ_API_KEY
+        sync: false # Enter your Groq API key in Render Dashboard
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: HOST
+        value: 0.0.0.0
+
+  # -------------------------------------------------------
+  # 2. Frontend Static Site (React + Vite)
+  # -------------------------------------------------------
+  - type: static
+    name: localbite-frontend
+    runtime: static
+    rootDir: frontend
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: localbite-backend
+          property: host

@@ -403,54 +403,73 @@ tests/test_recommender.py::test_sweet_vs_spicy_intent_separation PASSED  [100%]
 
 ---
 
-## 🚢 15. Deployment Instructions (Vercel Frontend & Render Backend)
+## 🚢 15. Deployment Instructions (Complete Render Setup)
 
-### Part 1: Deploying Backend to Render
-1. Sign in to [Render](https://render.com) and click **"New +" -> "Web Service"**.
-2. Connect your GitHub repository: `Tanmay-1607/AI-Based-Local-Food-Recommendation-Agent`.
-3. Configure the service settings:
-   - **Name**: `localbite-ai-backend` (or your preferred name)
-   - **Root Directory**: `backend`
-   - **Runtime**: `Python 3`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. In **Environment Variables**, add:
-   - `GROQ_API_KEY`: *(Your secret Groq API key)*
-   - `GROQ_MODEL`: `openai/gpt-oss-20b`
-   - `TAVILY_API_KEY`: *(Your secret Tavily API key)*
-5. Click **Create Web Service**.
-6. Once deployed, copy your public Render URL:
-   - Example: `https://localbite-ai-backend.onrender.com`
-   - Test it by opening: `https://localbite-ai-backend.onrender.com/api/health` in your browser (it should return `{"status":"healthy",...}`).
-
-> [!NOTE]
-> Render's free tier spins down instances after 15 minutes of inactivity. When accessed after inactivity, the first request may take ~30–50 seconds to spin up.
+LocalBite AI is fully configured for seamless deployment on **[Render](https://render.com)**. You have two simple options:
 
 ---
 
-### Part 2: Deploying Frontend to Vercel & Connecting Backend
+### Option A: 1-Click Render Blueprint Deployment (Recommended)
 
-When deployed to Vercel, the frontend runs under HTTPS (`https://your-app.vercel.app`). It **cannot** connect to `http://127.0.0.1:8000` because browsers block unencrypted mixed content and localhost only exists on your local machine. You **must** provide your live Render backend URL in Vercel.
+The repository includes a production-grade `render.yaml` Blueprint that automatically configures both the FastAPI Backend and the Vite React Frontend with automatic URL linking.
 
-#### Step-by-Step Vercel Configuration:
-1. Open your project on the [Vercel Dashboard](https://vercel.com/dashboard).
-2. Go to **Settings** → **Environment Variables**.
-3. Add the following variable:
-   - **Key**: `VITE_API_URL`
-   - **Value**: `https://your-backend-name.onrender.com` *(Replace with your actual Render URL from Part 1)*
-   - **Target Environments**: Check all (Production, Preview, Development).
-4. Click **Save**.
+1. Sign in to your **[Render Dashboard](https://dashboard.render.com)**.
+2. Click **"New +"** in the top navigation and select **"Blueprint"**.
+3. Connect your GitHub repository: `Tanmay-1607/AI-Based-Local-Food-Recommendation-Agent`.
+4. Render will read `render.yaml` and discover two services:
+   - `localbite-backend` (Web Service)
+   - `localbite-frontend` (Static Site)
+5. Fill in the required environment variable:
+   - `GROQ_API_KEY`: *(Paste your free Groq API key from [console.groq.com](https://console.groq.com))*
+6. Click **"Apply"**. Render will build and deploy both services automatically!
+   - The frontend automatically links to the backend URL via `render.yaml`.
 
-> [!TIP]
-> The frontend normalizes the URL automatically. You can enter either `https://your-backend-name.onrender.com` or `https://your-backend-name.onrender.com/api` — it will never create duplicate `/api/api` paths.
+---
 
-#### Redeploying on Vercel to Apply Changes:
-Because Vite injects `import.meta.env.VITE_*` variables at **build time**, you **must trigger a fresh build** after setting the variable:
-1. In Vercel, go to the **Deployments** tab.
-2. Click the three dots (`...`) on the latest deployment and choose **Redeploy**.
-3. *(Important)* Make sure the option **"Use existing Build Cache"** is **UNCHECKED**.
-4. Click **Redeploy**.
-5. Once deployment completes, visit your Vercel site. The frontend will now connect directly to your live Render backend.
+### Option B: Unified Single Web Service (Backend + Frontend Together)
+
+You can run both the Python FastAPI backend and the compiled React frontend together on a **single free Render Web Service**:
+
+1. In Render Dashboard, click **"New +"** → **"Web Service"**.
+2. Connect your GitHub repository: `Tanmay-1607/AI-Based-Local-Food-Recommendation-Agent`.
+3. Choose **Docker** as the runtime (Render will automatically detect the root `Dockerfile`):
+   - **Name**: `localbite-ai`
+   - **Branch**: `main`
+   - **Region**: `Oregon (US West)`
+   - **Instance Type**: `Free`
+4. Add your Environment Variable:
+   - `GROQ_API_KEY`: *(Your Groq API key)*
+   - `GROQ_MODEL`: `openai/gpt-oss-20b`
+5. Click **"Create Web Service"**.
+   - The multi-stage Dockerfile builds the React frontend, packages the FastAPI backend, and serves both from one single URL with **zero CORS configuration needed**.
+
+---
+
+### Option C: Manual GUI Setup (Separate Services)
+
+If you prefer configuring services manually in the Render dashboard:
+
+#### 1. Backend Web Service:
+- **New +** → **Web Service** → Connect repo.
+- **Name**: `localbite-backend`
+- **Root Directory**: `backend`
+- **Runtime**: `Python 3`
+- **Build Command**: `pip install --upgrade pip && pip install -r requirements.txt`
+- **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables**:
+  - `GROQ_API_KEY`: `your_key`
+  - `GROQ_MODEL`: `openai/gpt-oss-20b`
+  - `PYTHON_VERSION`: `3.11.9`
+
+#### 2. Frontend Static Site:
+- **New +** → **Static Site** → Connect repo.
+- **Name**: `localbite-frontend`
+- **Root Directory**: `frontend`
+- **Build Command**: `npm install && npm run build`
+- **Publish Directory**: `dist`
+- **Rewrite Rule**: `/*` → `/index.html`
+- **Environment Variables**:
+  - `VITE_API_URL`: `https://your-backend-name.onrender.com` (Your Render backend URL from step 1)
 
 ---
 
