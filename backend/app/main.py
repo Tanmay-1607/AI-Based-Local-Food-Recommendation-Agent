@@ -29,7 +29,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for Vite frontend (supports both localhost and 127.0.0.1 on any port)
+# Enable CORS for Vite frontend, Vercel deployments, Render, and local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -37,8 +37,9 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://ai-based-local-food-recommendation-agent.vercel.app",
     ],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app|.*\.onrender\.com)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

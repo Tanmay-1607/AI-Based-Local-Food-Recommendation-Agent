@@ -17,7 +17,21 @@ class RecommenderEngine:
 
     def load_data(self):
         """Loads and prepares the dataset, fitting the TF-IDF representation."""
-        self.df = pd.read_csv(self.csv_path)
+        from pathlib import Path
+        csv_file = Path(self.csv_path)
+        if not csv_file.exists():
+            candidate_paths = [
+                DATA_PATH,
+                Path(__file__).resolve().parent.parent / "data" / "food_places.csv",
+                Path("backend/data/food_places.csv"),
+                Path("data/food_places.csv"),
+            ]
+            for candidate in candidate_paths:
+                if candidate.exists():
+                    csv_file = candidate
+                    break
+
+        self.df = pd.read_csv(csv_file)
         # Clean and type-cast
         self.df["price"] = pd.to_numeric(self.df["price"], errors="coerce").fillna(100.0)
         self.df["rating"] = pd.to_numeric(self.df["rating"], errors="coerce").fillna(4.0)

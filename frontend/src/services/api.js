@@ -1,10 +1,33 @@
-// Support VITE_API_URL for production (e.g. Render backend), relative '/api' via Vite proxy for local dev, or fallback to 127.0.0.1:8000
-const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
-const API_BASE = envApiUrl
-  ? (envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl.replace(/\/+$/, '')}/api`)
-  : (typeof window !== 'undefined' && window.location.port === '5173'
-      ? '/api'
-      : 'http://127.0.0.1:8000/api');
+// Dynamic API configuration:
+// 1. If VITE_API_URL is configured (e.g. on Render: https://your-backend.onrender.com), use it.
+// 2. If running locally on Vite (localhost:5173 / 127.0.0.1:5173), use relative '/api' via Vite dev proxy.
+// 3. Fallback to direct 'http://127.0.0.1:8000/api' for local non-proxied execution.
+
+export function getApiBaseUrl() {
+  const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
+  if (envApiUrl && envApiUrl.trim()) {
+    const trimmed = envApiUrl.trim().replace(/\/+$/, '');
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  }
+  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '/api';
+  }
+  return 'http://127.0.0.1:8000/api';
+}
+
+export function getApiDiagnosticInfo() {
+  const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
+  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+  return {
+    rawEnvUrl: envApiUrl || null,
+    resolvedApiBase: getApiBaseUrl(),
+    isVercel,
+    isMissingViteApiUrl: isVercel && (!envApiUrl || !envApiUrl.trim()),
+    currentOrigin: typeof window !== 'undefined' ? window.location.origin : ''
+  };
+}
+
+const API_BASE = getApiBaseUrl();
 
 export async function checkHealth() {
   const res = await fetch(`${API_BASE}/health`);

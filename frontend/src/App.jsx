@@ -7,9 +7,10 @@ import {
   checkHealth, 
   getRecommendations, 
   submitFeedback,
-  getFeedbackList
+  getFeedbackList,
+  getApiDiagnosticInfo
 } from './services/api';
-import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw } from 'lucide-react';
+import { Search, Sparkles, Utensils, AlertCircle, CheckCircle2, ArrowRight, RotateCcw, WifiOff, RefreshCw, ExternalLink } from 'lucide-react';
 
 const QUICK_FILTERS = [
   { label: "All Nagpur", query: "", cuisine: null, budget: null, foodType: null },
@@ -81,9 +82,13 @@ export default function App() {
     init();
   }, []);
 
+  const [apiDiag, setApiDiag] = useState(() => getApiDiagnosticInfo());
+
   const loadRecommendations = async (query = searchQuery, budget = maxBudget, diet = foodType, cui = activeCuisine) => {
     setIsLoading(true);
     setErrorMsg(null);
+    const diag = getApiDiagnosticInfo();
+    setApiDiag(diag);
     try {
       const payload = {
         query: query || "",
@@ -94,9 +99,14 @@ export default function App() {
       };
       const res = await getRecommendations(payload);
       setRecommendations(res.results || []);
+      setErrorMsg(null);
     } catch (err) {
       console.error("API error:", err);
-      setErrorMsg("Failed to fetch recommendations. Ensure backend is running.");
+      if (diag.isMissingViteApiUrl) {
+        setErrorMsg("VITE_API_URL is not set in Vercel. Frontend cannot connect to your Render backend without it.");
+      } else {
+        setErrorMsg(`Failed to connect to backend at ${diag.resolvedApiBase}. If using Render free tier, it may take 30-50 seconds to wake up.`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -261,84 +271,142 @@ export default function App() {
       {/* Main Recommendations Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 flex-1 w-full">
         
-        {/* Connection Notice if backend down */}
-        {errorMsg && (
-          <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center space-x-3 text-sm max-w-xl mx-auto">
-            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
-            <div>
-              <p className="font-bold">Connection Notice</p>
-              <p className="text-xs text-rose-700">{errorMsg}</p>
+        {/* If backend connection error, show helpful connection guidance instead of misleading "0 spots found" */}
+        {errorMsg ? (
+          <div className="max-w-2xl mx-auto py-12 px-6 bg-white rounded-3xl border border-rose-200 shadow-card text-center space-y-6">
+            <div className="w-16 h-16 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center mx-auto text-rose-600">
+              <WifiOff className="w-8 h-8" />
             </div>
-          </div>
-        )}
 
-        {/* Results Header */}
-        <div className="flex items-center justify-between pb-3 mb-6 border-b border-cream-300">
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-forest-950 flex items-center space-x-2">
-              <Utensils className="w-5 h-5 text-spice-600" />
-              <span>
-                {isShowingLikedOnly 
-                  ? 'Your Saved Favorite Dishes' 
-                  : (activeFilterLabel !== "All Nagpur" ? `${activeFilterLabel} Food Results` : 'Authentic Nagpur Recommendations')}
-              </span>
-            </h2>
-            <p className="text-xs text-stone-500 font-medium">
-              Ranked by TF-IDF Content Similarity, Budget Fit, Ratings & SQLite Personalization
-            </p>
-          </div>
+            <div>
+              <h2 className="text-xl font-black text-forest-950">Backend Connection Notice</h2>
+              <p className="text-sm text-stone-600 mt-2 max-w-lg mx-auto leading-relaxed">
+                {errorMsg}
+              </p>
+            </div>
 
-          <div className="text-xs font-bold text-stone-600 px-3 py-1.5 rounded-full bg-white border border-cream-300 shadow-soft">
-            Showing <span className="text-forest-900 font-black">{displayedItems.length}</span> spots
-          </div>
-        </div>
-
-        {/* Cards Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-8">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} className="h-60 rounded-3xl bg-white/70 border border-cream-200 animate-pulse p-5 space-y-3">
-                <div className="h-4 bg-cream-300 rounded w-1/3" />
-                <div className="h-6 bg-cream-300 rounded w-3/4" />
-                <div className="h-4 bg-cream-200 rounded w-1/2" />
-                <div className="h-16 bg-cream-200 rounded-xl" />
+            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 text-left text-xs space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="font-bold text-stone-700">Target Backend API:</span>
+                <code className="px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-mono text-[11px] break-all">
+                  {apiDiag.resolvedApiBase}
+                </code>
               </div>
-            ))}
-          </div>
-        ) : displayedItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedItems.map((item) => (
-              <FoodCard 
-                key={item.restaurant_id}
-                item={item}
-                onSelectDetails={setSelectedFood}
-                onFeedback={handleFeedback}
-                isLiked={likedIds.has(item.restaurant_id)}
-                isDisliked={dislikedIds.has(item.restaurant_id)}
-              />
-            ))}
+              {apiDiag.isMissingViteApiUrl && (
+                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3 rounded-xl space-y-1.5">
+                  <p className="font-bold text-xs flex items-center space-x-1.5">
+                    <span>⚠️ Configuration Needed in Vercel:</span>
+                  </p>
+                  <p className="text-[11px] text-stone-600">
+                    Your frontend is hosted on Vercel, but it does not know where your Render backend is.
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-stone-700 text-[11px] font-medium pt-1">
+                    <li>Open your Vercel Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
+                    <li>Add <strong>VITE_API_URL</strong> with value: <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-mono">https://your-backend.onrender.com</code></li>
+                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>Redeploy</strong>.</li>
+                  </ol>
+                </div>
+              )}
+              {!apiDiag.isMissingViteApiUrl && (
+                <p className="text-stone-500 text-[11px] pt-1 border-t border-stone-200">
+                  Render Free Tier Note: If your Render web service recently went to sleep, the first request may take ~30–50 seconds to boot up.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => loadRecommendations()}
+                disabled={isLoading}
+                className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-forest-900 text-white text-xs font-bold hover:bg-forest-800 transition-all shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>{isLoading ? 'Connecting...' : 'Retry Connection'}</span>
+              </button>
+
+              <a
+                href={`${apiDiag.resolvedApiBase}/health`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-cream-300 text-stone-700 text-xs font-bold hover:bg-cream-100 transition-all"
+              >
+                <span>Check API Health</span>
+                <ExternalLink className="w-3 h-3 text-stone-400" />
+              </a>
+            </div>
           </div>
         ) : (
-          <div className="text-center py-16 px-4 bg-white rounded-3xl border border-cream-300 shadow-card max-w-md mx-auto">
-            <div className="w-14 h-14 rounded-full bg-cream-200 flex items-center justify-center mx-auto mb-3 text-2xl">
-              {isShowingLikedOnly ? '❤️' : '🔍'}
+          <>
+            {/* Results Header */}
+            <div className="flex items-center justify-between pb-3 mb-6 border-b border-cream-300">
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-forest-950 flex items-center space-x-2">
+                  <Utensils className="w-5 h-5 text-spice-600" />
+                  <span>
+                    {isShowingLikedOnly 
+                      ? 'Your Saved Favorite Dishes' 
+                      : (activeFilterLabel !== "All Nagpur" ? `${activeFilterLabel} Food Results` : 'Authentic Nagpur Recommendations')}
+                  </span>
+                </h2>
+                <p className="text-xs text-stone-500 font-medium">
+                  Ranked by TF-IDF Content Similarity, Budget Fit, Ratings & SQLite Personalization
+                </p>
+              </div>
+
+              <div className="text-xs font-bold text-stone-600 px-3 py-1.5 rounded-full bg-white border border-cream-300 shadow-soft">
+                Showing <span className="text-forest-900 font-black">{displayedItems.length}</span> spots
+              </div>
             </div>
-            <h3 className="text-base font-bold text-forest-950">
-              {isShowingLikedOnly ? 'No saved favorites yet' : 'No matching places found'}
-            </h3>
-            <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
-              {isShowingLikedOnly 
-                ? 'Click the 👍 button on any food card to save it here for quick access!' 
-                : 'Try typing a simpler query or click "All Nagpur" above.'}
-            </p>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="mt-4 px-4 py-2 rounded-xl bg-forest-900 text-white font-bold text-xs hover:bg-forest-800 transition-colors"
-            >
-              Show All Nagpur Food
-            </button>
-          </div>
+
+            {/* Cards Grid */}
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-8">
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <div key={n} className="h-60 rounded-3xl bg-white/70 border border-cream-200 animate-pulse p-5 space-y-3">
+                    <div className="h-4 bg-cream-300 rounded w-1/3" />
+                    <div className="h-6 bg-cream-300 rounded w-3/4" />
+                    <div className="h-4 bg-cream-200 rounded w-1/2" />
+                    <div className="h-16 bg-cream-200 rounded-xl" />
+                  </div>
+                ))}
+              </div>
+            ) : displayedItems.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {displayedItems.map((item) => (
+                  <FoodCard 
+                    key={item.restaurant_id}
+                    item={item}
+                    onSelectDetails={setSelectedFood}
+                    onFeedback={handleFeedback}
+                    isLiked={likedIds.has(item.restaurant_id)}
+                    isDisliked={dislikedIds.has(item.restaurant_id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 px-4 bg-white rounded-3xl border border-cream-300 shadow-card max-w-md mx-auto">
+                <div className="w-14 h-14 rounded-full bg-cream-200 flex items-center justify-center mx-auto mb-3 text-2xl">
+                  {isShowingLikedOnly ? '❤️' : '🔍'}
+                </div>
+                <h3 className="text-base font-bold text-forest-950">
+                  {isShowingLikedOnly ? 'No saved favorites yet' : 'No matching places found'}
+                </h3>
+                <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+                  {isShowingLikedOnly 
+                    ? 'Click the 👍 button on any food card to save it here for quick access!' 
+                    : 'Try typing a simpler query or click "All Nagpur" above.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="mt-4 px-4 py-2 rounded-xl bg-forest-900 text-white font-bold text-xs hover:bg-forest-800 transition-colors"
+                >
+                  Show All Nagpur Food
+                </button>
+              </div>
+            )}
+          </>
         )}
 
       </main>
