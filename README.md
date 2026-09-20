@@ -403,34 +403,54 @@ tests/test_recommender.py::test_sweet_vs_spicy_intent_separation PASSED  [100%]
 
 ---
 
-## 🚢 15. Deployment Instructions (Vercel & Render)
+## 🚢 15. Deployment Instructions (Vercel Frontend & Render Backend)
 
-### Deploying Frontend to Vercel
-1. Push this repository to GitHub.
-2. Sign in to [Vercel](https://vercel.com) and click **"Add New Project"**.
-3. Import your repository: `AI-Based-Local-Food-Recommendation-Agent`.
-4. Configure Build Settings:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: `Vite`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-5. Configure Environment Variables (if calling external production backend):
-   - `VITE_API_URL`: `https://your-backend-service.onrender.com`
-6. Click **Deploy**.
-
-### Deploying Backend to Render
+### Part 1: Deploying Backend to Render
 1. Sign in to [Render](https://render.com) and click **"New +" -> "Web Service"**.
-2. Connect your GitHub repository.
-3. Configure the service:
+2. Connect your GitHub repository: `Tanmay-1607/AI-Based-Local-Food-Recommendation-Agent`.
+3. Configure the service settings:
+   - **Name**: `localbite-ai-backend` (or your preferred name)
    - **Root Directory**: `backend`
    - **Runtime**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 4. In **Environment Variables**, add:
-   - `GROQ_API_KEY`: `your_actual_groq_key`
+   - `GROQ_API_KEY`: *(Your secret Groq API key)*
    - `GROQ_MODEL`: `openai/gpt-oss-20b`
-   - `TAVILY_API_KEY`: `your_actual_tavily_key`
+   - `TAVILY_API_KEY`: *(Your secret Tavily API key)*
 5. Click **Create Web Service**.
+6. Once deployed, copy your public Render URL:
+   - Example: `https://localbite-ai-backend.onrender.com`
+   - Test it by opening: `https://localbite-ai-backend.onrender.com/api/health` in your browser (it should return `{"status":"healthy",...}`).
+
+> [!NOTE]
+> Render's free tier spins down instances after 15 minutes of inactivity. When accessed after inactivity, the first request may take ~30–50 seconds to spin up.
+
+---
+
+### Part 2: Deploying Frontend to Vercel & Connecting Backend
+
+When deployed to Vercel, the frontend runs under HTTPS (`https://your-app.vercel.app`). It **cannot** connect to `http://127.0.0.1:8000` because browsers block unencrypted mixed content and localhost only exists on your local machine. You **must** provide your live Render backend URL in Vercel.
+
+#### Step-by-Step Vercel Configuration:
+1. Open your project on the [Vercel Dashboard](https://vercel.com/dashboard).
+2. Go to **Settings** → **Environment Variables**.
+3. Add the following variable:
+   - **Key**: `VITE_API_URL`
+   - **Value**: `https://your-backend-name.onrender.com` *(Replace with your actual Render URL from Part 1)*
+   - **Target Environments**: Check all (Production, Preview, Development).
+4. Click **Save**.
+
+> [!TIP]
+> The frontend normalizes the URL automatically. You can enter either `https://your-backend-name.onrender.com` or `https://your-backend-name.onrender.com/api` — it will never create duplicate `/api/api` paths.
+
+#### Redeploying on Vercel to Apply Changes:
+Because Vite injects `import.meta.env.VITE_*` variables at **build time**, you **must trigger a fresh build** after setting the variable:
+1. In Vercel, go to the **Deployments** tab.
+2. Click the three dots (`...`) on the latest deployment and choose **Redeploy**.
+3. *(Important)* Make sure the option **"Use existing Build Cache"** is **UNCHECKED**.
+4. Click **Redeploy**.
+5. Once deployment completes, visit your Vercel site. The frontend will now connect directly to your live Render backend.
 
 ---
 

@@ -1,42 +1,108 @@
-// Dynamic API configuration:
-// 1. If VITE_API_URL is configured (e.g. on Render: https://your-backend.onrender.com), use it.
-// 2. If running locally on Vite (localhost:5173 / 127.0.0.1:5173), use relative '/api' via Vite dev proxy.
-// 3. Fallback to direct 'http://127.0.0.1:8000/api' for local non-proxied execution.
+// =========================================================
+// LocalBite AI — Frontend API Client Service
+// =========================================================
 
+/**
+ * Normalizes any user-provided backend URL so it cleanly ends with '/api'
+ * without duplicate '/api/api' or missing/multiple slashes.
+ */
+export function normalizeApiUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return '';
+  }
+  let clean = rawUrl.trim().replace(/\/+$/, '');
+  if (clean.endsWith('/api')) {
+    return clean;
+  }
+  return `${clean}/api`;
+}
+
+/**
+ * Checks whether the current runtime environment is local development.
+ */
+export function isLocalEnvironment() {
+  if (typeof window === 'undefined') return true;
+  const { hostname, port } = window.location;
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    port === '5173' ||
+    port === '3000'
+  );
+}
+
+/**
+ * Resolves the active API base URL:
+ * 1. Reads import.meta.env.VITE_API_URL (highest priority for Render/Production).
+ * 2. If running locally under Vite dev server (port 5173), uses relative '/api' proxy.
+ * 3. If running locally outside Vite proxy, falls back to direct 'http://127.0.0.1:8000/api'.
+ * 4. In production (e.g., Vercel), returns empty string if VITE_API_URL is omitted.
+ *    (Never falls back to localhost in production!)
+ */
 export function getApiBaseUrl() {
   const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
   if (envApiUrl && envApiUrl.trim()) {
-    const trimmed = envApiUrl.trim().replace(/\/+$/, '');
-    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+    return normalizeApiUrl(envApiUrl);
   }
-  if (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return '/api';
+
+  // Development-only fallback
+  if (isLocalEnvironment()) {
+    if (typeof window !== 'undefined' && window.location.port === '5173') {
+      return '/api';
+    }
+    return 'http://127.0.0.1:8000/api';
   }
-  return 'http://127.0.0.1:8000/api';
+
+  // Production without VITE_API_URL: do not guess or fallback to localhost
+  return '';
 }
 
+/**
+ * Constructs a fully qualified endpoint URL, validating production configuration.
+ */
+export function getEndpointUrl(endpoint) {
+  const base = getApiBaseUrl();
+  if (!base) {
+    throw new Error(
+      "Backend API URL (VITE_API_URL) is not configured in Vercel. Please set VITE_API_URL in Vercel Project Settings ➔ Environment Variables with your Render backend URL."
+    );
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${base}${cleanEndpoint}`;
+}
+
+/**
+ * Returns diagnostic metadata for the UI to display helpful setup guidance.
+ */
 export function getApiDiagnosticInfo() {
   const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
-  const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+  const isLocal = isLocalEnvironment();
+  const apiBase = getApiBaseUrl();
+
   return {
     rawEnvUrl: envApiUrl || null,
-    resolvedApiBase: getApiBaseUrl(),
-    isVercel,
-    isMissingViteApiUrl: isVercel && (!envApiUrl || !envApiUrl.trim()),
+    resolvedApiBase: apiBase || '(Not Configured — Awaiting Vercel Environment Variable)',
+    isLocal,
+    isMissingProductionApiUrl: !isLocal && (!envApiUrl || !envApiUrl.trim()),
     currentOrigin: typeof window !== 'undefined' ? window.location.origin : ''
   };
 }
 
-const API_BASE = getApiBaseUrl();
+// ---------------------------------------------------------
+// API Client Functions
+// ---------------------------------------------------------
 
 export async function checkHealth() {
-  const res = await fetch(`${API_BASE}/health`);
+  const url = getEndpointUrl('/health');
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Health check failed: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function getMetadata() {
-  const res = await fetch(`${API_BASE}/meta`);
+  const url = getEndpointUrl('/meta');
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Metadata fetch failed: HTTP ${res.status}`);
   return res.json();
 }
@@ -48,13 +114,16 @@ export async function getFoodPlaces(params = {}) {
       query.append(key, val);
     }
   });
-  const res = await fetch(`${API_BASE}/food?${query.toString()}`);
+  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const url = getEndpointUrl(`/food${queryString}`);
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Food fetch failed: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function getRecommendations(payload) {
-  const res = await fetch(`${API_BASE}/recommend`, {
+  const url = getEndpointUrl('/recommend');
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -67,7 +136,8 @@ export async function getRecommendations(payload) {
 }
 
 export async function chatWithAgent(message, history = []) {
-  const res = await fetch(`${API_BASE}/chat`, {
+  const url = getEndpointUrl('/chat');
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history }),
@@ -80,13 +150,15 @@ export async function chatWithAgent(message, history = []) {
 }
 
 export async function getFoodDetail(restaurantId) {
-  const res = await fetch(`${API_BASE}/food/${encodeURIComponent(restaurantId)}`);
+  const url = getEndpointUrl(`/food/${encodeURIComponent(restaurantId)}`);
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Detail fetch failed: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function submitFeedback(feedbackData) {
-  const res = await fetch(`${API_BASE}/feedback`, {
+  const url = getEndpointUrl('/feedback');
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(feedbackData),
@@ -96,19 +168,22 @@ export async function submitFeedback(feedbackData) {
 }
 
 export async function getFeedbackList() {
-  const res = await fetch(`${API_BASE}/feedback`);
+  const url = getEndpointUrl('/feedback');
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Feedback list failed: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function getUserPreferences() {
-  const res = await fetch(`${API_BASE}/preferences`);
+  const url = getEndpointUrl('/preferences');
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Preferences fetch failed: HTTP ${res.status}`);
   return res.json();
 }
 
 export async function saveUserPreferences(prefs) {
-  const res = await fetch(`${API_BASE}/preferences`, {
+  const url = getEndpointUrl('/preferences');
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(prefs),

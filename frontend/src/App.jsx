@@ -292,24 +292,25 @@ export default function App() {
                   {apiDiag.resolvedApiBase}
                 </code>
               </div>
-              {apiDiag.isMissingViteApiUrl && (
-                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3 rounded-xl space-y-1.5">
-                  <p className="font-bold text-xs flex items-center space-x-1.5">
-                    <span>⚠️ Configuration Needed in Vercel:</span>
+              {apiDiag.isMissingProductionApiUrl && (
+                <div className="pt-2.5 border-t border-stone-200 text-amber-900 bg-amber-50 p-3.5 rounded-xl space-y-2">
+                  <p className="font-bold text-xs flex items-center space-x-1.5 text-amber-950">
+                    <span>⚠️ Vercel Setup Step Required:</span>
                   </p>
-                  <p className="text-[11px] text-stone-600">
-                    Your frontend is hosted on Vercel, but it does not know where your Render backend is.
+                  <p className="text-[11px] text-stone-700 leading-relaxed">
+                    Your frontend is deployed on Vercel, but the environment variable <code className="bg-amber-100 font-bold px-1 py-0.5 rounded font-mono">VITE_API_URL</code> is not configured.
                   </p>
-                  <ol className="list-decimal list-inside space-y-1 text-stone-700 text-[11px] font-medium pt-1">
-                    <li>Open your Vercel Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
-                    <li>Add <strong>VITE_API_URL</strong> with value: <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-mono">https://your-backend.onrender.com</code></li>
-                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>Redeploy</strong>.</li>
+                  <ol className="list-decimal list-inside space-y-1.5 text-stone-800 text-[11px] font-medium pt-1">
+                    <li>Open your Vercel Dashboard ➔ Project ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>.</li>
+                    <li>Add Key: <code className="bg-white border border-amber-300 font-bold px-1.5 py-0.5 rounded font-mono">VITE_API_URL</code></li>
+                    <li>Value: <code className="bg-white border border-amber-300 font-bold px-1.5 py-0.5 rounded font-mono">https://your-backend-name.onrender.com</code> (your Render URL)</li>
+                    <li>Go to <strong>Deployments</strong> ➔ Click <strong>Redeploy</strong> (uncheck build cache).</li>
                   </ol>
                 </div>
               )}
-              {!apiDiag.isMissingViteApiUrl && (
+              {!apiDiag.isMissingProductionApiUrl && (
                 <p className="text-stone-500 text-[11px] pt-1 border-t border-stone-200">
-                  Render Free Tier Note: If your Render web service recently went to sleep, the first request may take ~30–50 seconds to boot up.
+                  Render Free Tier Note: If your Render web service recently went to sleep, the first request takes ~30–50 seconds to boot up.
                 </p>
               )}
             </div>
@@ -325,15 +326,17 @@ export default function App() {
                 <span>{isLoading ? 'Connecting...' : 'Retry Connection'}</span>
               </button>
 
-              <a
-                href={`${apiDiag.resolvedApiBase}/health`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-cream-300 text-stone-700 text-xs font-bold hover:bg-cream-100 transition-all"
-              >
-                <span>Check API Health</span>
-                <ExternalLink className="w-3 h-3 text-stone-400" />
-              </a>
+              {!apiDiag.isMissingProductionApiUrl && apiDiag.resolvedApiBase.startsWith('http') && (
+                <a
+                  href={`${apiDiag.resolvedApiBase}/health`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-cream-300 text-stone-700 text-xs font-bold hover:bg-cream-100 transition-all"
+                >
+                  <span>Check API Health</span>
+                  <ExternalLink className="w-3 h-3 text-stone-400" />
+                </a>
+              )}
             </div>
           </div>
         ) : (
