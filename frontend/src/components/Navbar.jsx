@@ -46,17 +46,19 @@ export default function Navbar({ health, onOpenChat, likedCount = 0, isShowingLi
             )}
           </div>
 
-          {/* Gradio Playground Link */}
-          <a
-            href="http://127.0.0.1:7860"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open Gradio Playground"
-            className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-forest-900 bg-forest-50 hover:bg-forest-100 border border-forest-200 transition-colors"
-          >
-            <span>Gradio Lab</span>
-            <ExternalLink className="w-3 h-3 opacity-70" />
-          </a>
+          {/* Gradio Playground Link (Shown locally or if VITE_GRADIO_URL configured) */}
+          {(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || import.meta.env?.VITE_GRADIO_URL)) && (
+            <a
+              href={import.meta.env?.VITE_GRADIO_URL || "http://127.0.0.1:7860"}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open Gradio Playground"
+              className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-forest-900 bg-forest-50 hover:bg-forest-100 border border-forest-200 transition-colors"
+            >
+              <span>Gradio Lab</span>
+              <ExternalLink className="w-3 h-3 opacity-70" />
+            </a>
+          )}
 
           {/* Liked Favorites Toggle Button */}
           <button

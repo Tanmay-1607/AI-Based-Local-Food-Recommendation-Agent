@@ -3,6 +3,22 @@
 // =========================================================
 
 /**
+ * Detects the raw backend URL from any configured environment variable.
+ * Checks VITE_API_URL first, then common aliases.
+ */
+export function getRawEnvApiUrl() {
+  if (typeof import.meta === 'undefined' || !import.meta.env) return '';
+  const candidate = (
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_BACKEND_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_SERVER_URL ||
+    ''
+  );
+  return typeof candidate === 'string' ? candidate.trim() : '';
+}
+
+/**
  * Normalizes any user-provided backend URL so it cleanly ends with '/api'
  * without duplicate '/api/api' or missing/multiple slashes.
  */
@@ -34,15 +50,15 @@ export function isLocalEnvironment() {
 
 /**
  * Resolves the active API base URL:
- * 1. Reads import.meta.env.VITE_API_URL (highest priority for Render/Production).
+ * 1. Reads VITE_API_URL or aliases (highest priority for Render/Production).
  * 2. If running locally under Vite dev server (port 5173), uses relative '/api' proxy.
  * 3. If running locally outside Vite proxy, falls back to direct 'http://127.0.0.1:8000/api'.
  * 4. In production (e.g., Vercel), returns empty string if VITE_API_URL is omitted.
  *    (Never falls back to localhost in production!)
  */
 export function getApiBaseUrl() {
-  const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
-  if (envApiUrl && envApiUrl.trim()) {
+  const envApiUrl = getRawEnvApiUrl();
+  if (envApiUrl) {
     return normalizeApiUrl(envApiUrl);
   }
 
@@ -65,7 +81,7 @@ export function getEndpointUrl(endpoint) {
   const base = getApiBaseUrl();
   if (!base) {
     throw new Error(
-      "Backend API URL (VITE_API_URL) is not configured in Vercel. Please set VITE_API_URL in Vercel Project Settings ➔ Environment Variables with your Render backend URL."
+      "VITE_API_URL is not set in Vercel. Frontend cannot connect to your Render backend without it."
     );
   }
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -73,18 +89,23 @@ export function getEndpointUrl(endpoint) {
 }
 
 /**
- * Returns diagnostic metadata for the UI to display helpful setup guidance.
+ * Returns safe diagnostic metadata for the UI to display helpful setup guidance.
+ * Never exposes secrets.
  */
 export function getApiDiagnosticInfo() {
-  const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
+  const envApiUrl = getRawEnvApiUrl();
   const isLocal = isLocalEnvironment();
   const apiBase = getApiBaseUrl();
+  const isConfigured = Boolean(envApiUrl);
+  const isMissing = !isLocal && !isConfigured;
 
   return {
     rawEnvUrl: envApiUrl || null,
     resolvedApiBase: apiBase || '(Not Configured — Awaiting Vercel Environment Variable)',
+    isConfigured,
     isLocal,
-    isMissingProductionApiUrl: !isLocal && (!envApiUrl || !envApiUrl.trim()),
+    isMissingProductionApiUrl: isMissing,
+    isMissingViteApiUrl: isMissing, // Alias for component compatibility
     currentOrigin: typeof window !== 'undefined' ? window.location.origin : ''
   };
 }
