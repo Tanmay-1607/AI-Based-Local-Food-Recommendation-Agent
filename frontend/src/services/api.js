@@ -1,7 +1,10 @@
-// Use relative '/api' via Vite proxy when running dev server, fallback to direct backend URL
-const API_BASE = typeof window !== 'undefined' && window.location.port === '5173'
-  ? '/api'
-  : 'http://127.0.0.1:8000/api';
+// Support VITE_API_URL for production (e.g. Render backend), relative '/api' via Vite proxy for local dev, or fallback to 127.0.0.1:8000
+const envApiUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL;
+const API_BASE = envApiUrl
+  ? (envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl.replace(/\/+$/, '')}/api`)
+  : (typeof window !== 'undefined' && window.location.port === '5173'
+      ? '/api'
+      : 'http://127.0.0.1:8000/api');
 
 export async function checkHealth() {
   const res = await fetch(`${API_BASE}/health`);
